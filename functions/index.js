@@ -36,33 +36,43 @@ exports.onPairRequest = functions.firestore.document('pairingPool/{id}').onCreat
     
     // Search for a matching profile in the pool
     let pairSearchReference = firestore().collection('pairingPool').where('active', '==', true);
+    let pairSearchReferenceA = pairSearchReference.where('uid', '<', pairRequest.uid);
+    let pairSearchReferenceB = pairSearchReference.where('uid', '>', pairRequest.uid);
     
     // Apply Age Filters
-    // ageMinBirthdate = pairRequest.minAge
-    // ageMaxBirthdate = pairRequest.maxAge
+    // ageMinBirthdate = pairRequest.minAge // TODO: Implement this
+    // ageMaxBirthdate = pairRequest.maxAge // TODO: Implement this
     // pairSearchReference = pairSearchReference.where('dob', '<', ageMinBirthdate);
     // pairSearchReference = pairSearchReference.where('dob', '>', ageMaxBirthdate);
 
     // Apply Location Filters
+    // TODO: Implement
 
     let results = [];
 
     // Apply Gender Filters
     if(pairRequest.genders.male){
-        pairSearchReferenceMale = pairSearchReference.where('gender', '==', 'male');
-        let pairSearchSnapshotMale = await pairSearchReferenceMale.get();
-        pairSearchSnapshotMale.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
+        pairSearchReferenceMaleA = pairSearchReferenceA.where('gender', '==', 'male');
+        pairSearchReferenceMaleB = pairSearchReferenceB.where('gender', '==', 'male');
+        let pairSearchSnapshotMaleA = await pairSearchReferenceMaleA.get();
+        let pairSearchSnapshotMaleB = await pairSearchReferenceMaleB.get();
+        pairSearchSnapshotMaleA.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
+        pairSearchSnapshotMaleB.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
     }
     if(pairRequest.genders.female){
-        pairSearchReferenceFemale = pairSearchReference.where('gender', '==', 'female');
-        let pairSearchSnapshotMale = await pairSearchReferenceFemale.get();
-        pairSearchSnapshotMale.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
+        let pairSearchReferenceFemaleA = pairSearchReferenceA.where('gender', '==', 'female');
+        let pairSearchReferenceFemaleB = pairSearchReferenceB.where('gender', '==', 'female');
+        let pairSearchSnapshotFemaleA = await pairSearchReferenceFemaleA.get();
+        let pairSearchSnapshotFemaleB = await pairSearchReferenceFemaleB.get();
+        pairSearchSnapshotFemaleA.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
+        pairSearchSnapshotFemaleB.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
     }
-    if(pairRequest.genders.other){
-        pairSearchReferenceOther = pairSearchReference.where('gender', '==', 'other');
-        let pairSearchSnapshotMale = await pairSearchReferenceOther.get();
-        pairSearchSnapshotMale.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
-    }
+    // TODO: Implement
+    // if(pairRequest.genders.other){
+    //     pairSearchReferenceOther = pairSearchReference.where('gender', '==', 'other');
+    //     let pairSearchSnapshotMale = await pairSearchReferenceOther.get();
+    //     pairSearchSnapshotMale.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
+    // }
 
     // Get Match Parameters
     let matchedUser = results[0];
