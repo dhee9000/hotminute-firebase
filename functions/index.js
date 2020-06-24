@@ -29,6 +29,18 @@ generateRTCToken = function generateRTCToken(uid, channel){
     return token;
 }
 
+generateCombinedDocId = function (uid1, uid2) {
+    if(uid1.localeCompare(uid2) < 0){
+        return `${uid1}_${uid2}`;
+    }
+    else if(uid1.localeCompare(uid2) > 0){
+        return `${uid2}_${uid1}`;
+    }
+    else{
+        throw(new Error("cannot create combined id for same user"));
+    }
+}
+
 exports.onPairRequest = functions.firestore.document('pairingPool/{id}').onCreate(async (pairRequestSnapshot, context) => {
     
     // Get the request params
@@ -74,9 +86,14 @@ exports.onPairRequest = functions.firestore.document('pairingPool/{id}').onCreat
     //     pairSearchSnapshotMale.docs.forEach(doc => results.push({...doc.data(), id: doc.id}));
     // }
 
+    if(results.length === 0){
+        console.log("No matches found for id: " + pairRequestSnapshot.id);
+        return;
+    }
+
     // Get Match Parameters
     let matchedUser = results[0];
-    let roomId = `${pairRequest.uid}_${matchedUser.uid}`;
+    let roomId = generateCombinedDocId(pairRequest.uid, matchedUser.uid);
 
     let batch = firestore().batch();
 
@@ -86,13 +103,27 @@ exports.onPairRequest = functions.firestore.document('pairingPool/{id}').onCreat
     // Send Match to Matched User
     batch.update(firestore().collection('pairingPool').doc(matchedUser.id), { paired: true, pairedUid: pairRequest.uid, active: false, roomId, roomToken: generateRTCToken(matchedUser.uid, roomId) });
 
+
+    batch.create(
+        firestore().collection('pairings').doc(generateCombinedDocId(pairRequest.uid, matchedUser.uid) + "_" + Date.now()),
+        { 
+            pairedOn: firestore.FieldValue.serverTimestamp(),
+            uids: [pairRequest.uid, matchedUser.uid],
+            [pairRequest.uid]: pairRequest,
+            [matchedUser.uid]: matchedUser
+        }
+    );
+
     await batch.commit();
     return;
 
 });
 
-exports.onSwipe = functions.firestore.document('swipes/{id}').onCreate(async (swipeSnapshot, context) => {
+exports.onSwipe = functions.firestore.document('swipes/{id}').onWrite(async (changeSnapshot, context) => {
     
+    // Get the snapshot after the change
+    let swipeSnapshot = changeSnapshot.after;
+
     // Get the swipe params
     let swipeData = swipeSnapshot.data();
 
@@ -118,12 +149,49 @@ exports.onSwipe = functions.firestore.document('swipes/{id}').onCreate(async (sw
 
         // Create a match if it was
         firestore().collection('matches').add({
-            uid1: usersInvolved[1],
-            uid2: usersInvolved[0],
+            uids: [usersInvolved[1], usersInvolved[0]],
             dateMatched: firestore.FieldValue.serverTimestamp(),
         });
 
     }
 
+});
+
+exports.onMessageSent = functions.firestore.document('chats/{chatId}/messages/{messageId}').onCreate(async (messageSnapshot, context) => {
+
+    let messageData = messageSnapshot.data();
+
+    firestore().collection('chats').doc(context.params.chatId).update({
+        lastMessageBy: messageData.sentBy,
+        lastMessage: messageData.text,
+    });
+
+    // TODO: notify user
+    
+});
+
+exports.resetDatabase = functions.https.onRequest( async (req, res) => {
+    
+    console.log("RESETTING APPLICATION!")
+    
+    let batch = firestore().batch();
+    
+    let pairingPoolEntries = await firestore().collection('pairingPool').get();
+    let pairings = await firestore().collection('pairings').get();
+    let swipes = await firestore().collection('swipes').get();
+    let matches = await firestore().collection('matches').get();
+    let chats = await firestore().collection('chats').get()
+    
+    pairingPoolEntries.forEach(doc => batch.delete(doc.ref));
+    pairings.forEach(doc => batch.delete(doc.ref));
+    swipes.forEach(doc => batch.delete(doc.ref));
+    matches.forEach(doc => batch.delete(doc.ref));
+    chats.forEach(doc => batch.delete(doc.ref));
+
+    await batch.commit();
+    
+    console.log("RESET COMPLETE!");
+
+    res.send("Reset Completed!")
 });
 
