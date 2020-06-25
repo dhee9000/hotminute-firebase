@@ -1,7 +1,7 @@
 const functions = require('firebase-functions');
 
 const admin = require('firebase-admin');
-const { firestore } = require('firebase-admin');
+const { firestore, auth } = require('firebase-admin');
 admin.initializeApp();
 
 // // Create and Deploy Your First Cloud Functions
@@ -181,12 +181,21 @@ exports.resetDatabase = functions.https.onRequest( async (req, res) => {
     let swipes = await firestore().collection('swipes').get();
     let matches = await firestore().collection('matches').get();
     let chats = await firestore().collection('chats').get()
+
+    let filters = await firestore().collection('filters').get();
+    let profiles = await firestore().collection('profiles').get();
     
     pairingPoolEntries.forEach(doc => batch.delete(doc.ref));
     pairings.forEach(doc => batch.delete(doc.ref));
     swipes.forEach(doc => batch.delete(doc.ref));
     matches.forEach(doc => batch.delete(doc.ref));
     chats.forEach(doc => batch.delete(doc.ref));
+
+    filters.forEach(doc => batch.delete(doc.ref));
+    profiles.forEach(doc => {
+        auth().revokeRefreshTokens(doc.id);
+        batch.delete(doc.ref);
+    })
 
     await batch.commit();
     
